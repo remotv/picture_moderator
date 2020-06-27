@@ -68,6 +68,9 @@ ws.onmessage = async event => {
     let data = JSON.parse(event.data);
     if (data.e === "INTERNAL_APPROVE_IMG_RESULT") {
         console.log(data)
+        if (data.d.error) {
+            console.log(data.d.details);
+        }
     } else if (data.e === "INTERNAL_REQUEST_IMG_APPROVAL") {
         imageQue.push(data.d.image);
         await axios.get(data.d.path).then(res => {
@@ -87,20 +90,23 @@ ws.onmessage = async event => {
 
 const approveImage = (id, approved = true) => {
     console.log("Trying to approve image")
-    const i = imageQue.filter(image => image.id === id);
-    const image = i[0]
-    imageQue.pop(image)
-    image.approved = approved;
-    ws.send(JSON.stringify({
-        e: 'INTERNAL_APPROVE_IMG',
-        d: {
-            image: {
+    try {
+
+        const i = imageQue.filter(image => image.id === id);
+        const image = i[0]
+        imageQue.pop(image)
+        image.approved = approved;
+        ws.send(JSON.stringify({
+            e: 'INTERNAL_APPROVE_IMG',
+            d: {
                 id: image.id,
                 user_id: image.user_id,
                 created: image.created,
                 approved: image.approved,
                 ref: image.ref
             }
-        }
-    }))
+        }))
+    } catch(e) {
+        console.log("Failed to approve image", e);
+    }
 }
