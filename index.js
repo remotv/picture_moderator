@@ -1,11 +1,12 @@
 const WebSocket = require('ws')
-const axios = require('axios');
 const Discord = require('discord.js')
 const settings = require("./settings.json");
 
 ws = new WebSocket(settings.ws_url);
 
-let imageQue = [];
+let imageQueue = [];
+
+const pictureChannel = '721553421533970442';
 
 const client = new Discord.Client();
 client.login(settings.discord_token)
@@ -21,14 +22,17 @@ client.on("ready", () => {
             key: settings.ws_token
         }
     }))
+    console.log("ready");
 })
 
 client.on("message", message => {
-    const content = message.content.split(/ +/);
-    if (content[0] === "approve") {
-        approveImage(content[1]);
-    } else if (content[0] === "deny") {
-        approveImage(content[1], false);
+    if (message.channel.name === "picture-moderation") {
+        const content = message.content.split(/ +/);
+        if (content[0] === "approve") {
+            approveImage(content[1]);
+        } else if (content[0] === "deny") {
+            approveImage(content[1], false);
+        } 
     }
 })
 
@@ -68,23 +72,23 @@ ws.onmessage = async event => {
     let data = JSON.parse(event.data);
     if (data.e === "INTERNAL_APPROVE_IMG_RESULT") {
         console.log(data)
-        if (data.d.error) {
-            console.log(data.d.details);
+        if (data.d && data.d.error) {
+            client.channels.get(pictureChannel).send(`${data.d.error}\n${data.d.details}`)
+        } else if (data.d) {
+            removeImageFromQueue(data.d.id);
+            client.channels.get(pictureChannel).send(`${data.d.status} ${data.d.id}`)
         }
+        
     } else if (data.e === "INTERNAL_REQUEST_IMG_APPROVAL") {
-        imageQue.push(data.d.image);
-        await axios.get(data.d.path).then(res => {
+        imageQueue.push(data.d.image);
+        const embed = new Discord.RichEmbed()
+            .setTitle("New image to approve")
+            .setColor(0x0099FF)
+            .setImage(data.d.path)
+            .setDescription(`Uploaded by ${data.d.user.username}\n${data.d.image.id}`);
 
-            const embed = new Discord.RichEmbed()
-                .setTitle("New image to approve")
-                .setColor(0x0099FF)
-                .setImage(data.d.path)
-                .setDescription(`Uploaded by ${data.d.user.username}\n${data.d.image.id}`);
+        client.channels.get(pictureChannel).send(embed);
 
-            client.channels.get('721553421533970442').send(embed);
-        }).catch(err => {
-            console.error(err);
-        })
     }
 }
 
@@ -92,10 +96,10 @@ const approveImage = (id, approved = true) => {
     console.log("Trying to approve image")
     try {
 
-        const i = imageQue.filter(image => image.id === id);
+        const i = imageQueue.filter(image => image.id === id);
         const image = i[0]
-        imageQue.pop(image)
         image.approved = approved;
+        console.log(image);
         ws.send(JSON.stringify({
             e: 'INTERNAL_APPROVE_IMG',
             d: {
@@ -106,7 +110,13 @@ const approveImage = (id, approved = true) => {
                 ref: image.ref
             }
         }))
-    } catch(e) {
+    } catch (e) {
         console.log("Failed to approve image", e);
     }
+}
+
+const removeImageFromQueue = (id) => {
+    const i = imageQueue.filter(image => image.id === id);
+    const image = i[0]
+    imageQueue.pop(image)
 }
