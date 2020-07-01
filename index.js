@@ -24,6 +24,11 @@ ws.onopen = () => {
 
 }
 
+ws.onclose = () => {
+    console.log('WebSocket closed exiting in 2 seconds')
+    setTimeout(() => process.exit(), 2000)
+}
+
 client.on("ready", () => {
     ws.send(JSON.stringify({
         e: 'INTERNAL_LISTENER_AUTHENTICATE',
